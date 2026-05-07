@@ -2,7 +2,7 @@ import json
 import os
 import threading
 import torch
-import urllib.request
+import requests
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -31,7 +31,11 @@ def download_model_files():
             continue
         url = f"{RELEASE_BASE}/{fname}"
         print(f"Téléchargement {fname}...")
-        urllib.request.urlretrieve(url, dest)
+        with requests.get(url, stream=True, timeout=300) as r:
+            r.raise_for_status()
+            with open(dest, "wb") as f:
+                for chunk in r.iter_content(chunk_size=65536):
+                    f.write(chunk)
         print(f"{fname} OK ({dest.stat().st_size // 1024} KB)")
 
 def load_model():
