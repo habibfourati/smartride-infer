@@ -17,11 +17,15 @@ tokenizer = None
 model     = None
 model_ready = False
 
+BASE_MODEL = "google/flan-t5-small"
+
 def load_model():
     global tokenizer, model, model_ready
     print("Chargement du modèle en arrière-plan...")
-    tokenizer   = T5Tokenizer.from_pretrained(str(MODEL_DIR))
-    model       = T5ForConditionalGeneration.from_pretrained(str(MODEL_DIR))
+    # Tokenizer depuis HuggingFace (évite le problème LFS avec spiece.model)
+    tokenizer = T5Tokenizer.from_pretrained(BASE_MODEL)
+    # Poids fine-tunés depuis le dossier local
+    model     = T5ForConditionalGeneration.from_pretrained(str(MODEL_DIR))
     model.eval()
     model_ready = True
     print("Modèle prêt.")
