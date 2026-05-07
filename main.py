@@ -10,9 +10,9 @@ from transformers import T5ForConditionalGeneration, T5Tokenizer
 
 app = FastAPI()
 
-MODEL_DIR   = Path("/tmp/smartride-model")
-MAX_IN_LEN  = 256
-MAX_OUT_LEN = 128
+MODEL_DIR      = Path("/tmp/smartride-model")
+MAX_IN_LEN     = 128
+MAX_NEW_TOKENS = 60
 
 tokenizer = None
 model     = None
@@ -42,6 +42,7 @@ def load_model():
     global tokenizer, model, model_ready
     print("Chargement du modèle en arrière-plan...")
     download_model_files()
+    torch.set_num_threads(4)
     tokenizer = T5Tokenizer.from_pretrained(BASE_MODEL)
     model     = T5ForConditionalGeneration.from_pretrained(str(MODEL_DIR))
     model.eval()
@@ -84,9 +85,8 @@ def infer(req: InferRequest):
     with torch.no_grad():
         out_ids = model.generate(
             inputs["input_ids"],
-            max_length=MAX_OUT_LEN,
-            num_beams=4,
-            early_stopping=True
+            max_new_tokens=MAX_NEW_TOKENS,
+            do_sample=False,
         )
 
     raw   = tokenizer.decode(out_ids[0], skip_special_tokens=True)
