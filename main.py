@@ -2,6 +2,7 @@ import json
 import os
 import threading
 import torch
+import urllib.request
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -9,7 +10,7 @@ from transformers import T5ForConditionalGeneration, T5Tokenizer
 
 app = FastAPI()
 
-MODEL_DIR   = Path(__file__).parent / "model"
+MODEL_DIR   = Path("/tmp/smartride-model")
 MAX_IN_LEN  = 256
 MAX_OUT_LEN = 128
 
@@ -19,18 +20,30 @@ model_ready = False
 
 BASE_MODEL = "google/flan-t5-small"
 
+RELEASE_BASE = "https://github.com/habibfourati/smartride-infer/releases/download/v1.0-model"
+MODEL_FILES  = ["model.safetensors", "config.json", "generation_config.json"]
+
+def download_model_files():
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    for fname in MODEL_FILES:
+        dest = MODEL_DIR / fname
+        if dest.exists():
+            continue
+        url = f"{RELEASE_BASE}/{fname}"
+        print(f"Téléchargement {fname}...")
+        urllib.request.urlretrieve(url, dest)
+        print(f"{fname} OK ({dest.stat().st_size // 1024} KB)")
+
 def load_model():
     global tokenizer, model, model_ready
     print("Chargement du modèle en arrière-plan...")
-    # Tokenizer depuis HuggingFace (évite le problème LFS avec spiece.model)
+    download_model_files()
     tokenizer = T5Tokenizer.from_pretrained(BASE_MODEL)
-    # Poids fine-tunés depuis le dossier local
     model     = T5ForConditionalGeneration.from_pretrained(str(MODEL_DIR))
     model.eval()
     model_ready = True
     print("Modèle prêt.")
 
-# Chargement en arrière-plan au démarrage — le serveur répond immédiatement
 threading.Thread(target=load_model, daemon=True).start()
 
 class InferRequest(BaseModel):
