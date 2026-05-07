@@ -1,6 +1,6 @@
 import json
 import os
-import re
+import threading
 import torch
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
@@ -13,12 +13,21 @@ MODEL_DIR   = Path(__file__).parent / "model"
 MAX_IN_LEN  = 256
 MAX_OUT_LEN = 128
 
-# Chargement du modèle au démarrage
-print("Chargement du modèle...")
-tokenizer = T5Tokenizer.from_pretrained(str(MODEL_DIR))
-model     = T5ForConditionalGeneration.from_pretrained(str(MODEL_DIR))
-model.eval()
-print("Modèle prêt.")
+tokenizer = None
+model     = None
+model_ready = False
+
+def load_model():
+    global tokenizer, model, model_ready
+    print("Chargement du modèle en arrière-plan...")
+    tokenizer   = T5Tokenizer.from_pretrained(str(MODEL_DIR))
+    model       = T5ForConditionalGeneration.from_pretrained(str(MODEL_DIR))
+    model.eval()
+    model_ready = True
+    print("Modèle prêt.")
+
+# Chargement en arrière-plan au démarrage — le serveur répond immédiatement
+threading.Thread(target=load_model, daemon=True).start()
 
 class InferRequest(BaseModel):
     ocr: str
@@ -33,18 +42,23 @@ def fix_json(s: str) -> str:
 
 @app.get("/health")
 def health():
+    if not model_ready:
+        return {"status": "loading"}
     return {"status": "ok"}
 
 @app.post("/infer")
 def infer(req: InferRequest):
+    if not model_ready:
+        raise HTTPException(status_code=503, detail="Modèle en cours de chargement")
+
     ocr = req.ocr.strip()
     if not ocr or len(ocr) < 5:
         raise HTTPException(status_code=400, detail="ocr trop court")
     if len(ocr) > 2000:
         ocr = ocr[:2000]
 
-    prompt = f"extrait: {ocr}"
-    inputs = tokenizer(prompt, max_length=MAX_IN_LEN, truncation=True, return_tensors="pt")
+    prompt  = f"extrait: {ocr}"
+    inputs  = tokenizer(prompt, max_length=MAX_IN_LEN, truncation=True, return_tensors="pt")
 
     with torch.no_grad():
         out_ids = model.generate(
@@ -54,15 +68,13 @@ def infer(req: InferRequest):
             early_stopping=True
         )
 
-    raw = tokenizer.decode(out_ids[0], skip_special_tokens=True)
+    raw   = tokenizer.decode(out_ids[0], skip_special_tokens=True)
     fixed = fix_json(raw)
 
     try:
-        result = json.loads(fixed)
+        return json.loads(fixed)
     except json.JSONDecodeError:
         raise HTTPException(status_code=422, detail=f"JSON invalide: {raw}")
-
-    return result
 
 if __name__ == "__main__":
     import uvicorn
