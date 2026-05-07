@@ -12,7 +12,7 @@ app = FastAPI()
 
 MODEL_DIR      = Path("/tmp/smartride-model")
 MAX_IN_LEN     = 128
-MAX_NEW_TOKENS = 60
+MAX_NEW_TOKENS = 80
 
 tokenizer = None
 model     = None
@@ -86,7 +86,8 @@ def infer(req: InferRequest):
         out_ids = model.generate(
             inputs["input_ids"],
             max_new_tokens=MAX_NEW_TOKENS,
-            do_sample=False,
+            num_beams=2,
+            early_stopping=True,
         )
 
     raw   = tokenizer.decode(out_ids[0], skip_special_tokens=True)
