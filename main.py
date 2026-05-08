@@ -10,7 +10,7 @@ from transformers import T5ForConditionalGeneration, T5Tokenizer
 
 app = FastAPI()
 
-MODEL_DIR      = Path("/tmp/smartride-model")
+MODEL_DIR      = Path(os.environ.get("MODEL_DIR", "/data/smartride-model"))
 MAX_IN_LEN     = 128
 MAX_NEW_TOKENS = 80
 
